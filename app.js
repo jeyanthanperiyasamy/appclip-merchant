@@ -50,8 +50,7 @@ let cart = [];
 // DOM elements
 const productsGrid = document.getElementById('productsGrid');
 const cartToggle = document.getElementById('cartToggle');
-const cartSidebar = document.getElementById('cartSidebar');
-const closeCart = document.getElementById('closeCart');
+const cartSection = document.getElementById('cartSection');
 const cartItems = document.getElementById('cartItems');
 const cartCount = document.getElementById('cartCount');
 const cartTotal = document.getElementById('cartTotal');
@@ -61,6 +60,7 @@ function init() {
     renderProducts();
     setupEventListeners();
     updateCartUI();
+    renderPayPalButtons();
 }
 
 // Render products
@@ -87,27 +87,13 @@ function renderProducts() {
 
 // Setup event listeners
 function setupEventListeners() {
-    cartToggle.addEventListener('click', toggleCart);
-    closeCart.addEventListener('click', toggleCart);
-    
-    // Close cart when clicking outside
-    cartSidebar.addEventListener('click', (e) => {
-        if (e.target === cartSidebar) {
-            toggleCart();
-        }
-    });
+    // Scroll to cart when cart toggle is clicked
+    cartToggle.addEventListener('click', scrollToCart);
     
     // Handle touch move for better touch detection
     document.addEventListener('touchmove', () => {
         touchMoved = true;
     }, { passive: true });
-    
-    // Handle escape key to close cart
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && cartSidebar.classList.contains('active')) {
-            toggleCart();
-        }
-    });
     
     // Prevent zoom on double tap for iOS
     document.addEventListener('touchend', (e) => {
@@ -189,17 +175,9 @@ function handleAddToCart(event) {
     addToCart(productId, button);
 }
 
-// Toggle cart visibility
-function toggleCart() {
-    cartSidebar.classList.toggle('active');
-    if (cartSidebar.classList.contains('active')) {
-        // Prevent body scroll when cart is open on mobile
-        document.body.style.overflow = 'hidden';
-        renderPayPalButtons();
-    } else {
-        // Restore body scroll
-        document.body.style.overflow = '';
-    }
+// Scroll to cart section
+function scrollToCart() {
+    cartSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Add item to cart
@@ -284,10 +262,8 @@ function updateCartUI() {
         setupCartItemListeners();
     }
     
-    // Re-render PayPal buttons if cart is open
-    if (cartSidebar.classList.contains('active')) {
-        renderPayPalButtons();
-    }
+    // Always render PayPal buttons since cart is always visible
+    renderPayPalButtons();
 }
 
 // Setup event listeners for cart items
@@ -412,7 +388,6 @@ function renderPayPalButtons() {
                     setTimeout(() => {
                         cart = [];
                         updateCartUI();
-                        toggleCart();
                     }, 3000);
                     
                     console.log('Transaction details:', details);
@@ -467,7 +442,6 @@ function simulateCheckout() {
     // Clear cart
     cart = [];
     updateCartUI();
-    toggleCart();
 }
 
 // Initialize app when DOM is loaded
