@@ -96,7 +96,31 @@ function setupEventListeners() {
             toggleCart();
         }
     });
+    
+    // Handle touch move for better touch detection
+    document.addEventListener('touchmove', () => {
+        touchMoved = true;
+    }, { passive: true });
+    
+    // Handle escape key to close cart
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && cartSidebar.classList.contains('active')) {
+            toggleCart();
+        }
+    });
+    
+    // Prevent zoom on double tap for iOS
+    document.addEventListener('touchend', (e) => {
+        const now = new Date().getTime();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, false);
 }
+
+// Variable for double tap prevention
+let lastTouchEnd = 0;
 
 // Setup add to cart button listeners
 function setupAddToCartListeners() {
@@ -104,16 +128,56 @@ function setupAddToCartListeners() {
     addToCartButtons.forEach(button => {
         // Remove any existing listeners to prevent duplicates
         button.removeEventListener('click', handleAddToCart);
-        button.removeEventListener('touchend', handleAddToCart);
+        button.removeEventListener('touchstart', handleTouchStart);
+        button.removeEventListener('touchend', handleTouchEnd);
         
-        // Add both click and touch event listeners for iOS Safari compatibility
+        // Add click event for desktop
         button.addEventListener('click', handleAddToCart);
-        button.addEventListener('touchend', handleAddToCart);
+        
+        // Add touch events for mobile with better handling
+        button.addEventListener('touchstart', handleTouchStart, { passive: true });
+        button.addEventListener('touchend', handleTouchEnd, { passive: false });
     });
+}
+
+// Variables for touch handling
+let touchStartTime = 0;
+let touchMoved = false;
+
+// Handle touch start
+function handleTouchStart(event) {
+    touchStartTime = Date.now();
+    touchMoved = false;
+    
+    const button = event.currentTarget;
+    button.classList.add('touch-active');
+}
+
+// Handle touch end
+function handleTouchEnd(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const button = event.currentTarget;
+    button.classList.remove('touch-active');
+    
+    // Only trigger if it was a quick tap (not a long press or scroll)
+    const touchDuration = Date.now() - touchStartTime;
+    if (touchDuration < 500 && !touchMoved) {
+        const productId = parseInt(button.dataset.productId);
+        if (productId) {
+            addToCart(productId, button);
+        }
+    }
 }
 
 // Handle add to cart button clicks
 function handleAddToCart(event) {
+    // Prevent double handling on touch devices
+    if (event.type === 'click' && 'ontouchstart' in window) {
+        return;
+    }
+    
     event.preventDefault();
     event.stopPropagation();
     
@@ -129,7 +193,12 @@ function handleAddToCart(event) {
 function toggleCart() {
     cartSidebar.classList.toggle('active');
     if (cartSidebar.classList.contains('active')) {
+        // Prevent body scroll when cart is open on mobile
+        document.body.style.overflow = 'hidden';
         renderPayPalButtons();
+    } else {
+        // Restore body scroll
+        document.body.style.overflow = '';
     }
 }
 
@@ -202,20 +271,88 @@ function updateCartUI() {
                     <h4>${item.name}</h4>
                     <p class="cart-item-price">$${item.price.toFixed(2)}</p>
                     <div class="quantity-controls">
-                        <button onclick="updateQuantity(${item.id}, ${item.quantity - 1})">-</button>
-                        <span>${item.quantity}</span>
-                        <button onclick="updateQuantity(${item.id}, ${item.quantity + 1})">+</button>
+                        <button class="quantity-btn" data-action="decrease" data-product-id="${item.id}" aria-label="Decrease quantity">-</button>
+                        <span class="quantity-display">${item.quantity}</span>
+                        <button class="quantity-btn" data-action="increase" data-product-id="${item.id}" aria-label="Increase quantity">+</button>
                     </div>
                 </div>
-                <button class="remove-item" onclick="removeFromCart(${item.id})">&times;</button>
+                <button class="remove-item" data-product-id="${item.id}" aria-label="Remove item">&times;</button>
             </div>
         `).join('');
+        
+        // Add event listeners to quantity and remove buttons
+        setupCartItemListeners();
     }
     
     // Re-render PayPal buttons if cart is open
     if (cartSidebar.classList.contains('active')) {
         renderPayPalButtons();
     }
+}
+
+// Setup event listeners for cart items
+function setupCartItemListeners() {
+    // Quantity buttons
+    const quantityButtons = document.querySelectorAll('.quantity-btn');
+    quantityButtons.forEach(button => {
+        button.addEventListener('click', handleQuantityChange);
+        button.addEventListener('touchend', handleQuantityTouch);
+    });
+    
+    // Remove buttons
+    const removeButtons = document.querySelectorAll('.remove-item');
+    removeButtons.forEach(button => {
+        button.addEventListener('click', handleRemoveItem);
+        button.addEventListener('touchend', handleRemoveTouch);
+    });
+}
+
+// Handle quantity change
+function handleQuantityChange(event) {
+    if (event.type === 'click' && 'ontouchstart' in window) {
+        return;
+    }
+    event.preventDefault();
+    const button = event.currentTarget;
+    const productId = parseInt(button.dataset.productId);
+    const action = button.dataset.action;
+    const item = cart.find(item => item.id === productId);
+    
+    if (item) {
+        const newQuantity = action === 'increase' ? item.quantity + 1 : item.quantity - 1;
+        updateQuantity(productId, newQuantity);
+    }
+}
+
+// Handle quantity touch
+function handleQuantityTouch(event) {
+    event.preventDefault();
+    const button = event.currentTarget;
+    const productId = parseInt(button.dataset.productId);
+    const action = button.dataset.action;
+    const item = cart.find(item => item.id === productId);
+    
+    if (item) {
+        const newQuantity = action === 'increase' ? item.quantity + 1 : item.quantity - 1;
+        updateQuantity(productId, newQuantity);
+    }
+}
+
+// Handle remove item
+function handleRemoveItem(event) {
+    if (event.type === 'click' && 'ontouchstart' in window) {
+        return;
+    }
+    event.preventDefault();
+    const productId = parseInt(event.currentTarget.dataset.productId);
+    removeFromCart(productId);
+}
+
+// Handle remove touch
+function handleRemoveTouch(event) {
+    event.preventDefault();
+    const productId = parseInt(event.currentTarget.dataset.productId);
+    removeFromCart(productId);
 }
 
 // Render PayPal buttons
